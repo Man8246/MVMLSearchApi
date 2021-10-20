@@ -97,26 +97,23 @@ def get_result(test_image_bytes, reference_images_pickle):
 
     dict_match = []
     for i in range(len(matched_indicies)):
-
-
         filename = reference_images_attributes["orig_name"][matched_indicies[i][0]].split("/")[-1]
         sim_score = round(matched_scores[i][0], 2)
-        print(sim_score)
-     # for duplicate and derivate category
-        if sim_score>=0.99:
-
-            type="duplicate"
-            dict_ind = {"filename": str(filename), "score": str(sim_score),"type":str(type)}
-            dict_match.append(dict_ind)
-
+        
+        # condition for duplicate images       
+        if sim_score==1.0:        
+            image_type="duplicate"
+        # condition for derivative images
         elif sim_score>=0.97:
-    
-            type2="derivative"
-            dict_ind = {"filename": str(filename), "score": str(sim_score),"type":str(type2)}
-            dict_match.append(dict_ind)
+            image_type="derivative"     
         else:
-            dict_ind = {"filename": str(filename), "score": str(sim_score)}
+            image_type=""
+            
+        if sim_score<0.6:
+            pass 
+        else:
+            dict_ind = {"filename": str(filename), "score": str(sim_score), "type": str(image_type)}
             dict_match.append(dict_ind)
-
+            
     return dict_match
 
