@@ -2,7 +2,7 @@
 
 import os
 from torchvision import transforms, datasets
-#import pandas as pd
+# import pandas as pd
 import torch
 import torch.nn as nn
 from PIL import Image
@@ -12,7 +12,7 @@ from torchvision import models, transforms
 from tqdm import tqdm
 import numpy as np
 import pickle
-#import base64
+# import base64
 import glob
 import sys
 
@@ -20,10 +20,10 @@ import sys
 # Define MediaValet Dataset Class
 class MediaValetDataset(Dataset):
 
-    def __init__(self, image_bytes ,transform):
+    def __init__(self, image_bytes, transform):
         self.transform = transform
         self.files = [image_bytes]
-        
+
     def __len__(self):
         return len(self.files)
 
@@ -50,15 +50,13 @@ cut_model = nn.Sequential(*list(model.children())[:-1])
 
 # Define Get Matches Function
 def get_matches(pair_dists, selected_indicies, num_matches=10):
-    
     k = min(num_matches, selected_indicies.shape[0])
     dists, inds = torch.topk(pair_dists[selected_indicies, :], k, dim=0, sorted=True)
-    return (selected_indicies[inds].detach().cpu().numpy(),dists.detach().cpu().numpy())
-    
+    return (selected_indicies[inds].detach().cpu().numpy(), dists.detach().cpu().numpy())
+
 
 # Get Final Result in json format
 def get_result(test_image_bytes, reference_images_pickle):
-
     data_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -67,13 +65,13 @@ def get_result(test_image_bytes, reference_images_pickle):
 
     # Use Test image path
     dataset = MediaValetDataset(test_image_bytes, data_transform)
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size = 1, shuffle = False, num_workers = 0)
-    
+    data_loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
+
     # Generate features and tensor for test image
     for i, (inputs) in enumerate(tqdm(data_loader)):
         inputs = inputs.to(DEVICE)
         test_image_feature = torch.squeeze(cut_model(inputs)).detach().cpu().numpy()
-        test_image_feature = np.reshape(test_image_feature,(1, test_image_feature.size))
+        test_image_feature = np.reshape(test_image_feature, (1, test_image_feature.size))
 
     test_image_tensor = torch.from_numpy(test_image_feature).float().to("cpu:0")
     test_image_tensor = test_image_tensor / torch.sqrt(torch.sum(test_image_tensor ** 2, dim=1, keepdim=True))
@@ -82,12 +80,13 @@ def get_result(test_image_bytes, reference_images_pickle):
     # Read pickle file and features of database images to get matching images
     with open(reference_images_pickle, "rb") as f:
         (reference_images_features, reference_images_attributes) = pickle.load(f)
-        
-    #print(reference_images_features.shape)
-    #print(reference_images_attributes)
+
+    # print(reference_images_features.shape)
+    # print(reference_images_attributes)
 
     reference_images_tensor = torch.from_numpy(reference_images_features).float().to("cpu:0")
-    reference_images_tensor = reference_images_tensor / torch.sqrt(torch.sum(reference_images_tensor ** 2, dim=1, keepdim=True))
+    reference_images_tensor = reference_images_tensor / torch.sqrt(
+        torch.sum(reference_images_tensor ** 2, dim=1, keepdim=True))
     reference_images_tensor = reference_images_tensor.to(DEVICE)
 
     indicies = torch.arange(0, reference_images_tensor.shape[0]).to(DEVICE)
@@ -100,8 +99,21 @@ def get_result(test_image_bytes, reference_images_pickle):
     for i in range(len(matched_indicies)):
         filename = reference_images_attributes["orig_name"][matched_indicies[i][0]].split("/")[-1]
         sim_score = round(matched_scores[i][0], 2)
-        dict_ind = {"filename": str(filename),"score": str(sim_score)}
-        dict_match.append(dict_ind)
         
+        # condition for duplicate images       
+        if sim_score==1.0:        
+            image_type="duplicate"
+        # condition for derivative images
+        elif sim_score>=0.97:
+            image_type="derivative"     
+        else:
+            image_type=""
+            
+        if sim_score<0.6:
+            pass 
+        else:
+            dict_ind = {"filename": str(filename), "score": str(sim_score), "type": str(image_type)}
+            dict_match.append(dict_ind)
+            
     return dict_match
-    
+
